@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "safescope"
+version = "0.1.0"
+description = "Plataforma de auditoria de segurança web com motor agressivo autorizado"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [{ name = "Wesley", email = "wesley@safescope.dev" }]
+
+dependencies = [
+    "pydantic>=2.10,<3",
+    "httpx>=0.27,<1",
+    "sqlalchemy[asyncio]>=2.0,<3",
+    "alembic>=1.14,<2",
+    "argon2-cffi>=25,<27",
+    "cryptography>=44,<51",
+    "python-dotenv>=1.0,<2",
+    "pyyaml>=6,<7",
+    "aiosqlite>=0.20,<1",
+    "asyncpg>=0.30,<1",
+    "psycopg[binary]>=3.2,<4",
+    "fastapi>=0.115,<1",
+    "uvicorn>=0.30,<1",
+    "reportlab>=4.2,<5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<10",
+    "pytest-asyncio>=1,<2",
+    "ruff>=0.8",
+    "pyright>=1.1",
+]
+scanners = [
+    # External scanner binaries managed separately
+    # ZAP, Nuclei, katana, ffuf, SQLmap, dalfox, semgrep
+]
+
+[project.scripts]
+safescope = "worker.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["packages"]
+asyncio_mode = "auto"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+
+[tool.pyright]
+include = ["packages", "apps/api", "worker"]
+extraPaths = ["packages"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.14"
+typeCheckingMode = "strict"
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportUnknownVariableType = false
+
+[tool.hatch.build.targets.wheel]
+packages = ["packages/safescope_core", "packages/safescope_scanners", "packages/safescope_report", "worker"]

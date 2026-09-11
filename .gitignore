@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Venv
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+.env.production
+.env.save
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Pytest
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Mypy / Pyright
+.mypy_cache/
+.pyright/
+
+# Ruff
+.ruff_cache/
+
+# Node (Next.js)
+node_modules/
+.next/
+out/
+
+# Alembic
+migrations/versions/__pycache__/
+
+# Supabase CLI cache
+supabase/.temp/
+
+# Reports / Evidence
+*.pdf
+evidence_store/
+screenshots/
+
+# Secrets
+*.pem
+*.key
+*.crt

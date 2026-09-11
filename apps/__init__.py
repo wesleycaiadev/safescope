@@ -1,0 +1,1 @@
+"""SafeScope application entry points."""
