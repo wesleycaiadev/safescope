@@ -39,6 +39,8 @@ def make_authz(**overrides) -> AuthorizationSpec:
         "max_rps": 3.0,
         "max_concurrency": 4,
         "allow_write_paths": (),
+        "allowed_content_types": ("application/json",),
+        "allowed_payloads": ("idor-object-swap", "authz-role-check"),
     }
     defaults.update(overrides)
     return AuthorizationSpec(**defaults)

@@ -22,6 +22,8 @@ class RequestDescriptor:
     headers: dict[str, str] = field(default_factory=dict)
     body: bytes | None = None
     redirect_depth: int = 0
+    is_probe: bool = False
+    payload_id: str | None = None
 
     @property
     def scheme(self) -> str:
@@ -43,6 +45,14 @@ class RequestDescriptor:
         after_scheme = self.url.split("://", 1)[1] if "://" in self.url else self.url
         host_port = after_scheme.split("/", 1)[0]
         return f"{self.scheme}://{host_port}"
+
+    @property
+    def content_type(self) -> str | None:
+        """Return the normalized media type, without optional parameters."""
+        for name, value in self.headers.items():
+            if name.lower() == "content-type":
+                return value.split(";", 1)[0].strip().lower() or None
+        return None
 
 
 @dataclass(frozen=True)

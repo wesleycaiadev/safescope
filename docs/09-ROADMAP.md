@@ -1,6 +1,7 @@
 # Roadmap de implementação
 
-**Status:** 4 de 5 fases concluídas. Resta 1 fase: produção.
+**Status:** 5 fases concluídas. A Fase 6, base segura para testes autenticados,
+está em andamento com 2 de 9 passos concluídos.
 
 ## Fase 1 — fundação segura
 
@@ -27,11 +28,24 @@
 - [x] Relatório executivo e técnico, exportação PDF e templates de proposta/ROE.
 - [x] ZAP Baseline passivo, sempre via allowlist e política. (imagem oficial validada localmente via Docker)
 
-## Fase 5 — produção (em andamento)
+## Fase 5 — persistência de produção
 
 - [x] Adaptador PostgreSQL (`asyncpg`), autenticação Supabase opt-in, papéis por organização e isolamento no backend.
 - [x] Migration Supabase com RLS, nenhum acesso direto de escrita e auditoria append-only.
-- [ ] Provisionar um projeto Supabase e aplicar migrations/RLS em ambiente de produção.
-- [ ] Integração autenticada e testes ativos somente após revisão de controles, testes de segurança e ROE válida.
+- [x] PostgreSQL Neon provisionado e migrations Alembic aplicadas em banco vazio.
+- [x] Operação local de usuário único mantida em modo de desenvolvimento; autenticação pública continua desabilitada.
 
-Critério de avanço: `make check` verde, revisão de segurança e documentação atualizada. As Fases 1 a 4 estão concluídas; a Fase 5 depende do provisionamento controlado do ambiente de produção.
+## Fase 6 — base segura para testes autenticados (em andamento)
+
+- [x] Modos reais e teto de risco por modo; `GUIDED` e `AGGRESSIVE` não são aliases passivos.
+- [x] Gate por requisição com escopo, exclusões, verbo, tipo de conteúdo, payload aprovado, janela vigente, orçamento, kill switch e reavaliação de redirect. `DELETE` somente em recurso criado pelo scan.
+- [ ] Transporte HTTP com conexão efetivamente presa ao IP já validado e estratégia controlada de concorrência/jitter.
+- [ ] `LoginProfile` e `SessionRuntime`, usando o cofre efêmero e verificando a saúde da sessão antes de cada scanner autenticado.
+- [ ] Descoberta autorizada de superfície por especificações fornecidas pelo cliente e artefatos públicos dentro do escopo.
+- [ ] Oráculos com controle negativo e evidência comparativa sanitizada.
+- [ ] Journal persistente de mutações, restauração e replay de recuperação no boot do worker.
+- [ ] Scanners ativos controlados, começando por matriz de autorização/IDOR em laboratório e sem habilitação automática em produção.
+- [ ] Laboratório vulnerável isolado no CI, com gabarito e métricas de falso positivo/negativo.
+
+Critério de avanço: `make check` verde, revisão de segurança, ROE válida e
+testes no laboratório isolado antes de qualquer habilitação de scan ativo.

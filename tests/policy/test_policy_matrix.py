@@ -178,6 +178,10 @@ class TestFreeze:
         assert snap["allow_mutations"] is False
         assert snap["max_requests"] == 300
         assert snap["authorization_id"] is None
+        assert snap["valid_from"] is None
+        assert snap["valid_until"] is None
+        assert snap["allowed_content_types"] == []
+        assert snap["allowed_payloads"] == []
 
 
 class TestAuthorizationLiveness:

@@ -71,6 +71,8 @@ class Why(enum.StrEnum):
     KILL_SWITCH_ENGAGED = "KILL_SWITCH_ENGAGED"
     SCANNER_RISK_TOO_HIGH = "SCANNER_RISK_TOO_HIGH"
     TIME_WINDOW_CLOSED = "TIME_WINDOW_CLOSED"
+    CONTENT_TYPE_NOT_ALLOWED = "CONTENT_TYPE_NOT_ALLOWED"
+    PAYLOAD_NOT_ALLOWED = "PAYLOAD_NOT_ALLOWED"
     SSRF_BLOCKED = "SSRF_BLOCKED"
     SCHEME_NOT_ALLOWED = "SCHEME_NOT_ALLOWED"
 
@@ -134,6 +136,8 @@ class AuthorizationSpec:
     max_rps: float = 3.0
     max_concurrency: int = 4
     allow_write_paths: tuple[str, ...] = ()
+    allowed_content_types: tuple[str, ...] = ()
+    allowed_payloads: tuple[str, ...] = ()
 
     def is_live(self, now: datetime | None = None) -> bool:
         """True if the authorization is currently valid (not expired)."""
@@ -184,13 +188,17 @@ class ScanPolicyEngine:
         allowed_scanners = [s.id for s in scanners if self._evaluate_risk(s, target, authz).allow]
 
         snap: dict[str, Any] = {
-            "version": 1,
+            "version": 2,
             "mode": target.mode.value,
             "target": target.base_url,
             "root_domain": target.root_domain,
             "risk_ceiling": MAX_RISK[target.mode].value,
             "authorization_id": authz.id if authz else None,
+            "valid_from": authz.valid_from.isoformat() if authz else None,
+            "valid_until": authz.valid_until.isoformat() if authz else None,
             "verbs": list(authz.allowed_verbs) if authz else ["GET", "HEAD"],
+            "allowed_content_types": list(authz.allowed_content_types) if authz else [],
+            "allowed_payloads": list(authz.allowed_payloads) if authz else [],
             "allow_mutations": bool(authz and authz.allow_mutations),
             "active_testing": bool(authz and authz.active_testing),
             "max_requests": authz.max_requests if authz else 300,

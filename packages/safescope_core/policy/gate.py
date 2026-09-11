@@ -21,6 +21,7 @@ from __future__ import annotations
 import fnmatch
 import ipaddress
 import time
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
@@ -158,6 +159,24 @@ class RequestGate:
                 f"{self._requests_made}/{max_req} requests used",
             )
 
+        # Authorization validity is checked again before every request. A scan
+        # that outlives its approved window stops at this boundary.
+        valid_from = self.snapshot.get("valid_from")
+        valid_until = self.snapshot.get("valid_until")
+        if valid_from is not None or valid_until is not None:
+            now = datetime.now(UTC)
+            try:
+                starts = datetime.fromisoformat(str(valid_from))
+                ends = datetime.fromisoformat(str(valid_until))
+            except TypeError, ValueError:
+                return Decision.deny(Why.TIME_WINDOW_CLOSED, "invalid authorization window")
+            if starts.tzinfo is None:
+                starts = starts.replace(tzinfo=UTC)
+            if ends.tzinfo is None:
+                ends = ends.replace(tzinfo=UTC)
+            if not starts <= now <= ends:
+                return Decision.deny(Why.TIME_WINDOW_CLOSED, "request is outside the authorization window")
+
         # 3. Redirect depth
         if req.redirect_depth > self.MAX_REDIRECT_DEPTH:
             return Decision.deny(Why.OUT_OF_SCOPE, f"redirect depth {req.redirect_depth} exceeds limit")
@@ -183,12 +202,42 @@ class RequestGate:
         if method not in self.snapshot["verbs"]:
             return Decision.deny(Why.VERB_NOT_ALLOWED, f"verb '{method}' not allowed")
 
-        # 8. Write operations — mutation control
+        # 8. Request body and probe payload controls. Baseline requests do not
+        # need a payload identifier; every deliberate probe does.
+        content_type = req.content_type
+        if content_type is not None:
+            allowed_content_types = {
+                str(item).split(";", 1)[0].strip().lower() for item in self.snapshot.get("allowed_content_types", [])
+            }
+            if content_type not in allowed_content_types:
+                return Decision.deny(
+                    Why.CONTENT_TYPE_NOT_ALLOWED,
+                    f"content type '{content_type}' not in authorization allowlist",
+                )
+
+        if req.is_probe:
+            if not req.payload_id:
+                return Decision.deny(Why.PAYLOAD_NOT_ALLOWED, "probe request has no payload identifier")
+            if req.payload_id not in self.snapshot.get("allowed_payloads", []):
+                return Decision.deny(
+                    Why.PAYLOAD_NOT_ALLOWED,
+                    f"payload '{req.payload_id}' not in authorization allowlist",
+                )
+
+        # 9. Write operations — mutation control
         if method in WRITE_VERBS:
             if not self.snapshot["allow_mutations"]:
                 return Decision.deny(Why.MUTATION_FORBIDDEN, f"{method} requires allow_mutations=true")
 
-            # Must be in ledger OR in allow_write_paths
+            # DELETE is limited to resources created and owned by this scan.
+            # A snapshot alone is not permission to remove an existing object.
+            if method == "DELETE" and not self.ledger.owns(req.url):
+                return Decision.deny(
+                    Why.NOT_IN_LEDGER,
+                    f"DELETE on '{req.url}': only scan-owned resources may be removed",
+                )
+
+            # Other writes must be in the ledger OR in allow_write_paths.
             if not self.ledger.owns(req.url):
                 if not any(fnmatch.fnmatch(req.url, p) for p in self.snapshot["allow_write_paths"]):
                     return Decision.deny(
@@ -197,13 +246,13 @@ class RequestGate:
                     )
                 # In allow_write_paths but not ledgered — must have snapshot
                 # (case 9: mutating existing resource requires state_before)
-                if method in ("PUT", "PATCH", "DELETE") and not self.ledger.has_snapshot(req.url):
+                if method in ("PUT", "PATCH") and not self.ledger.has_snapshot(req.url):
                     return Decision.deny(
                         Why.NOT_IN_LEDGER,
                         f"{method} on existing resource '{req.url}': snapshot() required before mutation",
                     )
 
-        # 9. Rate limiting — compute delay, don't sleep
+        # 10. Rate limiting — compute delay, don't sleep
         #    Transport is responsible for applying the delay
         self._requests_made += 1
 

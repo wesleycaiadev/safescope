@@ -6,7 +6,7 @@ O produto opera por política aplicada no backend: uma avaliação `PASSIVE` usa
 
 ## Estado atual
 
-As Fases 1, 2 e 3 estão implementadas. O MVP local possui banco SQLite, API FastAPI, dashboard Next.js, fila e worker contínuo, scanners passivos, evidências sanitizadas, Security Score e acompanhamento de correção. Relatórios/exportação são a próxima fase; autenticação e infraestrutura de produção permanecem na Fase 5.
+As Fases 1 a 5 estão implementadas. O produto possui banco SQLite ou PostgreSQL Neon, API FastAPI, dashboard Next.js, fila e worker contínuo, scanners passivos, evidências sanitizadas, Security Score, relatórios e acompanhamento de correção. A Fase 6 prepara, sem habilitar por padrão, os controles necessários para futuros testes autenticados e ativos em laboratório autorizado.
 
 ## Desenvolvimento local
 
@@ -45,19 +45,24 @@ O dashboard gera relatórios executivo e técnico em PDF, além de templates de 
 
 O ZAP Baseline é opcional e vem desativado. A integração detecta o lançador oficial `zap-baseline.py` no `PATH` ou a imagem oficial `ghcr.io/zaproxy/zaproxy:stable` pelo Docker. Marque a opção correspondente antes de enfileirar o scan. Ela usa argumentos fixos e só executa quando o snapshot do job permite explicitamente o scanner passivo. Consulte [`docs/11-RELATORIOS-E-ZAP.md`](docs/11-RELATORIOS-E-ZAP.md) para os limites e endpoints.
 
-## Produção com PostgreSQL e Supabase
+## PostgreSQL Neon e autenticação opcional
 
-O modo local permanece em SQLite. Para produção, use uma URL PostgreSQL, configure `SAFESCOPE_MODE=production`, `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_KEY` no backend; no dashboard, configure apenas as variáveis `NEXT_PUBLIC_*` correspondentes. Nunca exponha uma `service_role` ou chave secreta no navegador.
+O modo local pode usar SQLite ou uma URL PostgreSQL do Neon em `DATABASE_URL`.
+No cenário atual de usuário único, mantenha `SAFESCOPE_MODE=development` e não
+publique a API na internet. O banco não substitui autenticação: antes de expor o
+sistema publicamente, configure um provedor de identidade e mude para o modo de
+produção.
 
-Em um ambiente PostgreSQL vazio, aplique primeiro o esquema do SafeScope e depois as regras específicas do Supabase:
+Em um banco PostgreSQL vazio, aplique o esquema do SafeScope:
 
 ```bash
-./.venv/bin/alembic -x db_url="$DATABASE_URL" upgrade head
-npx supabase link --project-ref SEU_PROJECT_REF
-npx supabase db push
+./.venv/bin/alembic upgrade head
 ```
 
-A primeira organização criada por uma sessão autenticada recebe o papel `OWNER`. Esse owner pode registrar membros usando `POST /organizations/{organization_id}/members` com o UUID do usuário Supabase. As políticas RLS permitem somente leitura de dados da própria organização; escritas são mediadas pela API autenticada. Veja [`docs/12-PRODUCAO-SUPABASE.md`](docs/12-PRODUCAO-SUPABASE.md).
+O adaptador opcional de autenticação Supabase e suas regras RLS permanecem no
+repositório para uma futura implantação multiusuário. Eles não devem ser
+aplicados ao Neon, pois dependem do schema `auth` do Supabase. Veja
+[`docs/12-PRODUCAO-SUPABASE.md`](docs/12-PRODUCAO-SUPABASE.md).
 
 ## Modos
 

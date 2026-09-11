@@ -224,6 +224,8 @@ def _redirect_descriptor(current: RequestDescriptor, location: str) -> RequestDe
         headers=current.headers,
         body=body,
         redirect_depth=current.redirect_depth + 1,
+        is_probe=current.is_probe,
+        payload_id=current.payload_id,
     )
 
 

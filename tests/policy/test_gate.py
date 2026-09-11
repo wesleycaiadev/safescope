@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 from safescope_core.policy.engine import Why
 from safescope_core.policy.gate import KillSwitch, RequestGate, SSRFGuard
 from safescope_core.policy.request import RequestDescriptor
@@ -58,6 +60,65 @@ class TestScopeEnforcement:
         decision = gate.evaluate(req)
         assert decision.allow is False
         assert decision.why is Why.VERB_NOT_ALLOWED
+
+
+class TestAuthorizationWindow:
+    """The authorization window is enforced at every request boundary."""
+
+    def test_expired_snapshot_is_denied(self) -> None:
+        past = datetime.now(UTC) - timedelta(hours=1)
+        gate = _make_gate(snapshot_overrides={"valid_until": past.isoformat()})
+        decision = gate.evaluate(RequestDescriptor("GET", "https://acme.com.br/"))
+        assert decision.allow is False
+        assert decision.why is Why.TIME_WINDOW_CLOSED
+
+    def test_invalid_snapshot_window_fails_closed(self) -> None:
+        gate = _make_gate(snapshot_overrides={"valid_until": "not-a-date"})
+        decision = gate.evaluate(RequestDescriptor("GET", "https://acme.com.br/"))
+        assert decision.allow is False
+        assert decision.why is Why.TIME_WINDOW_CLOSED
+
+
+class TestProbeAllowlist:
+    """Active probes require approved payload IDs and content types."""
+
+    def test_approved_probe_passes(self) -> None:
+        request = RequestDescriptor(
+            "POST",
+            "https://acme.com.br/api/object",
+            headers={"Content-Type": "application/json; charset=utf-8"},
+            is_probe=True,
+            payload_id="idor-object-swap",
+        )
+        gate = _make_gate(snapshot_overrides={"allow_write_paths": [request.url]})
+        assert gate.evaluate(request).allow is True
+
+    def test_probe_without_identifier_is_denied(self) -> None:
+        request = RequestDescriptor("GET", "https://acme.com.br/api/object", is_probe=True)
+        decision = _make_gate().evaluate(request)
+        assert decision.allow is False
+        assert decision.why is Why.PAYLOAD_NOT_ALLOWED
+
+    def test_unapproved_payload_is_denied(self) -> None:
+        request = RequestDescriptor(
+            "GET",
+            "https://acme.com.br/api/object",
+            is_probe=True,
+            payload_id="unknown-probe",
+        )
+        decision = _make_gate().evaluate(request)
+        assert decision.allow is False
+        assert decision.why is Why.PAYLOAD_NOT_ALLOWED
+
+    def test_unapproved_content_type_is_denied(self) -> None:
+        request = RequestDescriptor(
+            "POST",
+            "https://acme.com.br/api/object",
+            headers={"content-type": "text/xml"},
+        )
+        decision = _make_gate().evaluate(request)
+        assert decision.allow is False
+        assert decision.why is Why.CONTENT_TYPE_NOT_ALLOWED
 
 
 class TestBudget:
@@ -152,6 +213,19 @@ class TestMutationControl:
 
         req = RequestDescriptor(method="PUT", url=url)
         decision = gate.evaluate(req)
+        assert decision.allow is False
+        assert decision.why is Why.NOT_IN_LEDGER
+
+    def test_delete_existing_resource_is_denied_even_with_snapshot(self) -> None:
+        ledger = ResourceLedger("SCAN-001")
+        url = "https://acme.com.br/api/users/me"
+        ledger.snapshot(url, {"role": "user"})
+        gate = _make_gate(
+            ledger=ledger,
+            snapshot_overrides={"allow_write_paths": [url]},
+        )
+
+        decision = gate.evaluate(RequestDescriptor("DELETE", url))
         assert decision.allow is False
         assert decision.why is Why.NOT_IN_LEDGER
 
