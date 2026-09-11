@@ -5,6 +5,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 if TYPE_CHECKING:
@@ -16,9 +17,17 @@ def async_database_url(url: str) -> str:
     if url.startswith("sqlite:///") and not url.startswith("sqlite+aiosqlite:///"):
         return url.replace("sqlite:///", "sqlite+aiosqlite:///", 1)
     if url.startswith("postgresql://"):
-        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
     if url.startswith("postgres://"):
-        return url.replace("postgres://", "postgresql+asyncpg://", 1)
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+    if url.startswith("postgresql+asyncpg://"):
+        parsed = make_url(url)
+        query = dict(parsed.query)
+        sslmode = query.pop("sslmode", None)
+        query.pop("channel_binding", None)
+        if sslmode is not None:
+            query["ssl"] = "require" if sslmode in {"require", "verify-ca", "verify-full"} else sslmode
+        return parsed.set(query=query).render_as_string(hide_password=False)
     return url
 
 
