@@ -26,3 +26,14 @@ da API, da interface ou do scanner que originou a requisição.
 - Redirecionamentos mantêm a classificação do probe e passam novamente pelo gate.
 - Esta decisão implementa somente a barreira de segurança; não adiciona payloads
   de exploração nem habilita o modo ativo na interface.
+
+## Complemento: pinagem da conexão HTTP
+
+O transporte padrão usa um backend de rede que troca o hostname pelo conjunto
+imutável de IPs previamente resolvidos e aprovados pelo `SSRFGuard` somente no
+momento de abrir o socket TCP. A origem HTTP continua sendo o domínio original,
+assim como o cabeçalho `Host`, a validação do certificado e o SNI. O pool é
+limitado pelo `max_concurrency` congelado na ROE. Um host sem pin falha fechado.
+
+Clientes injetados existem exclusivamente para testes e integrações controladas;
+o transporte padrão usado pelo worker é sempre o transporte com pinagem.

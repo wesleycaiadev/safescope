@@ -13,7 +13,7 @@ import socket
 import ssl
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 
@@ -24,6 +24,8 @@ from safescope_core.policy import (
     ResponseData,
     SSRFBlocked,
 )
+
+from .pinned_http import PinnedAsyncHTTPTransport
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -61,13 +63,21 @@ class GatedTransport:
         max_response_bytes: int = MAX_RESPONSE_BYTES,
     ) -> None:
         self._gate = gate
-        self._client = client or httpx.AsyncClient(
-            follow_redirects=False,
-            timeout=timeout,
-            trust_env=False,
-        )
-        self._owns_client = client is None
+        owns_client = client is None
+        self._pinned_transport: PinnedAsyncHTTPTransport | None = None
+        if client is None:
+            concurrency = max(1, int(gate.snapshot.get("max_concurrency", 1)))
+            self._pinned_transport = PinnedAsyncHTTPTransport(max_connections=concurrency)
+            client = httpx.AsyncClient(
+                transport=self._pinned_transport,
+                follow_redirects=False,
+                timeout=timeout,
+                trust_env=False,
+            )
+        self._client = client
+        self._owns_client = owns_client
         self._max_response_bytes = max_response_bytes
+        self._pins: dict[tuple[str, int], tuple[str, ...]] = {}
 
     async def __aenter__(self) -> GatedTransport:
         return self
@@ -85,7 +95,7 @@ class GatedTransport:
         current = descriptor
         for _ in range(MAX_REDIRECTS + 1):
             self._allow(current)
-            await self._validate_hostname(current.hostname)
+            await self._ensure_hostname_pin(current)
             delay = self._gate.compute_delay()
             if delay:
                 await asyncio.sleep(delay)
@@ -184,6 +194,18 @@ class GatedTransport:
     async def _validated_addresses(self, hostname: str, port: int) -> list[str]:
         return await self._validate_hostname(hostname, port)
 
+    async def _ensure_hostname_pin(self, descriptor: RequestDescriptor) -> tuple[str, ...]:
+        """Validate DNS once and freeze the result before opening a socket."""
+        port = _request_port(descriptor.url)
+        key = (descriptor.hostname.strip("[]").rstrip(".").lower(), port)
+        pinned = self._pins.get(key)
+        if pinned is None:
+            pinned = tuple(await self._validated_addresses(descriptor.hostname, port))
+            self._pins[key] = pinned
+            if self._pinned_transport is not None:
+                self._pinned_transport.backend.pin(descriptor.hostname, port, pinned)
+        return pinned
+
 
 async def _bounded_body(response: httpx.Response, limit: int) -> bytes:
     """Read only a bounded response body to avoid storing unbounded evidence."""
@@ -232,6 +254,13 @@ def _redirect_descriptor(current: RequestDescriptor, location: str) -> RequestDe
 def _https_url(hostname: str, port: int) -> str:
     authority = hostname if port == 443 else f"{hostname}:{port}"
     return f"https://{authority}/"
+
+
+def _request_port(url: str) -> int:
+    parsed = urlsplit(url)
+    if parsed.port is not None:
+        return parsed.port
+    return 443 if parsed.scheme.lower() == "https" else 80
 
 
 def sanitize_headers(headers: dict[str, str]) -> dict[str, str]:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
+import httpcore
 import httpx
 import pytest
 
@@ -17,7 +18,8 @@ from safescope_core.policy import (
     SSRFBlocked,
     SSRFGuard,
 )
-from safescope_scanners.transport import GatedTransport
+from safescope_scanners.pinned_http import PinnedNetworkBackend
+from safescope_scanners.transport import GatedTransport, _request_port
 
 from ..conftest import ACTIVE_SCANNER, make_authz, make_target
 
@@ -113,3 +115,67 @@ def test_private_dns_answer_is_blocked_before_http_request(monkeypatch) -> None:
         assert called is False
 
     asyncio.run(run())
+
+
+def test_dns_result_is_frozen_and_not_resolved_twice(monkeypatch) -> None:
+    async def run() -> None:
+        client = httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(200, request=request)))
+        transport = GatedTransport(_gate(), client=client)
+        resolutions = 0
+
+        async def public_dns(_hostname: str, _port: int) -> list[str]:
+            nonlocal resolutions
+            resolutions += 1
+            return ["93.184.216.34"]
+
+        monkeypatch.setattr(transport, "_validated_addresses", public_dns)
+        try:
+            descriptor = RequestDescriptor("GET", "https://acme.com.br/path")
+            assert await transport._ensure_hostname_pin(descriptor) == ("93.184.216.34",)
+            assert await transport._ensure_hostname_pin(descriptor) == ("93.184.216.34",)
+        finally:
+            await client.aclose()
+        assert resolutions == 1
+
+    asyncio.run(run())
+
+
+def test_pinned_backend_connects_to_ip_instead_of_hostname() -> None:
+    class RecordingBackend(httpcore.AsyncNetworkBackend):
+        def __init__(self) -> None:
+            self.hosts: list[str] = []
+
+        async def connect_tcp(self, host, port, timeout=None, local_address=None, socket_options=None):
+            self.hosts.append(host)
+            raise httpcore.ConnectError("stop after recording")
+
+        async def connect_unix_socket(self, path, timeout=None, socket_options=None):
+            raise AssertionError("unix socket must not be used")
+
+        async def sleep(self, seconds):
+            return None
+
+    async def run() -> None:
+        recording = RecordingBackend()
+        backend = PinnedNetworkBackend(recording)
+        backend.pin("acme.com.br", 443, ["93.184.216.34", "93.184.216.35"])
+        with pytest.raises(httpcore.ConnectError):
+            await backend.connect_tcp("acme.com.br", 443)
+        assert recording.hosts == ["93.184.216.34", "93.184.216.35"]
+
+    asyncio.run(run())
+
+
+def test_unpinned_backend_fails_closed() -> None:
+    async def run() -> None:
+        backend = PinnedNetworkBackend()
+        with pytest.raises(httpcore.ConnectError, match="no validated DNS pin"):
+            await backend.connect_tcp("acme.com.br", 443)
+
+    asyncio.run(run())
+
+
+def test_request_port_uses_scheme_defaults_and_explicit_port() -> None:
+    assert _request_port("https://acme.com.br/path") == 443
+    assert _request_port("http://acme.com.br/path") == 80
+    assert _request_port("https://acme.com.br:8443/path") == 8443

@@ -1,7 +1,7 @@
 # Roadmap de implementação
 
 **Status:** 5 fases concluídas. A Fase 6, base segura para testes autenticados,
-está em andamento com 2 de 9 passos concluídos.
+está em andamento com 3 de 9 passos concluídos.
 
 ## Fase 1 — fundação segura
 
@@ -39,12 +39,12 @@ está em andamento com 2 de 9 passos concluídos.
 
 - [x] Modos reais e teto de risco por modo; `GUIDED` e `AGGRESSIVE` não são aliases passivos.
 - [x] Gate por requisição com escopo, exclusões, verbo, tipo de conteúdo, payload aprovado, janela vigente, orçamento, kill switch e reavaliação de redirect. `DELETE` somente em recurso criado pelo scan.
-- [ ] Transporte HTTP com conexão efetivamente presa ao IP já validado e estratégia controlada de concorrência/jitter.
+- [x] Transporte HTTP com conexão presa ao IP validado, SNI/domínio original, redirect reavaliado e pool limitado pelo `max_concurrency` da ROE.
 - [ ] `LoginProfile` e `SessionRuntime`, usando o cofre efêmero e verificando a saúde da sessão antes de cada scanner autenticado.
 - [ ] Descoberta autorizada de superfície por especificações fornecidas pelo cliente e artefatos públicos dentro do escopo.
 - [ ] Oráculos com controle negativo e evidência comparativa sanitizada.
 - [ ] Journal persistente de mutações, restauração e replay de recuperação no boot do worker.
-- [ ] Scanners ativos controlados, começando por matriz de autorização/IDOR em laboratório e sem habilitação automática em produção.
+- [ ] Scanners ativos controlados, começando por matriz de autorização/IDOR em laboratório, com jitter adaptativo e planos de concorrência explícitos, sem habilitação automática em produção.
 - [ ] Laboratório vulnerável isolado no CI, com gabarito e métricas de falso positivo/negativo.
 
 Critério de avanço: `make check` verde, revisão de segurança, ROE válida e
