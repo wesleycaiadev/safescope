@@ -22,6 +22,13 @@ from .errors import (
 )
 from .gate import KillSwitch, RequestGate, SSRFGuard
 from .ledger import ResourceLedger
+from .recovery import (
+    RecoverySummary,
+    RestoreAction,
+    RestoreJournal,
+    RestoreKind,
+    replay_restore_journal,
+)
 from .request import RequestDescriptor, ResponseData
 
 __all__ = [
@@ -34,10 +41,14 @@ __all__ = [
     "MutationForbidden",
     "PolicyDeny",
     "PolicyError",
+    "RecoverySummary",
     "RequestDescriptor",
     "RequestGate",
     "ResourceLedger",
     "ResponseData",
+    "RestoreAction",
+    "RestoreJournal",
+    "RestoreKind",
     "Risk",
     "SSRFBlocked",
     "SSRFGuard",
@@ -47,4 +58,5 @@ __all__ = [
     "ScopeViolation",
     "TargetSpec",
     "Why",
+    "replay_restore_journal",
 ]

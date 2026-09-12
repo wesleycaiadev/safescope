@@ -1,0 +1,18 @@
+services:
+  idor-lab:
+    build:
+      context: .
+    ports:
+      - "127.0.0.1:8090:8090"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/docs')"]
+      interval: 5s
+      timeout: 2s
+      retries: 10

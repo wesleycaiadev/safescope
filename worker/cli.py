@@ -26,16 +26,45 @@ from safescope_core.models import (
     create_session_factory,
     normalize_observations,
 )
-from safescope_core.policy import KillSwitch, Mode, RequestGate, ResourceLedger, SSRFGuard
+from safescope_core.policy import (
+    KillSwitch,
+    Mode,
+    RequestGate,
+    ResourceLedger,
+    RestoreAction,
+    RestoreKind,
+    SSRFGuard,
+    replay_restore_journal,
+)
 from safescope_scanners import ALL_PASSIVE_SCANNERS
 from safescope_scanners.base import ScanContext
 from safescope_scanners.transport import GatedTransport
+from worker.restore_journal import FileRestoreJournal
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 load_dotenv()
 DATABASE_URL = "sqlite:///./safescope.db"
+JOURNAL_DIRECTORY = ".safescope/restore-journal"
+
+
+async def recover_pending_journal() -> int:
+    """Replay crash recovery before claiming any new scan job."""
+    journal = FileRestoreJournal(os.getenv("SAFESCOPE_JOURNAL_DIR", JOURNAL_DIRECTORY))
+
+    async def execute(action: RestoreAction):
+        ledger = ResourceLedger(action.scan_run_id)
+        if action.kind is RestoreKind.DELETE_CREATED:
+            ledger.record_create(action.request.url, "POST", action.marker)
+        else:
+            ledger.snapshot(action.request.url, {"journal": action.id})
+        gate = RequestGate(action.policy_snapshot, ledger, KillSwitch(), SSRFGuard())
+        async with GatedTransport(gate) as transport:
+            return await transport.request(action.request)
+
+    await replay_restore_journal(journal, execute)
+    return journal.unresolved_count()
 
 
 async def _write_audit(
@@ -103,6 +132,8 @@ async def _persist_observation(
 
 async def run_once(worker_id: str) -> int:
     """Claim and execute one pending passive job; return 1 when a job was claimed."""
+    if await recover_pending_journal():
+        raise RuntimeError("restore journal still has failed actions; refusing to start a new job")
     engine = create_engine(os.getenv("DATABASE_URL", DATABASE_URL))
     sessions = create_session_factory(engine)
     try:
@@ -211,7 +242,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="safescope")
     commands = parser.add_subparsers(dest="command", required=True)
     worker = commands.add_parser("worker", help="Run or inspect the local worker")
-    worker.add_argument("action", choices=["once", "start", "status"])
+    worker.add_argument("action", choices=["once", "start", "status", "recover"])
     worker.add_argument("--id", default=os.getenv("WORKER_ID", "worker-local-01"))
     worker.add_argument("--poll-interval", type=float, default=2.0)
     arguments = parser.parse_args()
@@ -222,5 +253,8 @@ def main() -> None:
     elif arguments.action == "start":
         with suppress(KeyboardInterrupt):
             asyncio.run(run_forever(arguments.id, max(0.2, arguments.poll_interval)))
-    else:
+    elif arguments.action == "status":
         print(json.dumps(asyncio.run(worker_status()), indent=2, sort_keys=True))
+    else:
+        unresolved = asyncio.run(recover_pending_journal())
+        print(json.dumps({"recovery_unresolved": unresolved}, indent=2, sort_keys=True))

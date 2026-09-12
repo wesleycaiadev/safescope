@@ -56,6 +56,7 @@ class ScanContext:
     http: Any  # Callable[[RequestDescriptor], Awaitable[ResponseData]]
     ledger: Any  # ResourceLedger
     tls: Any | None = None  # Callable[[str, int], Awaitable[TLSProbe]]
+    sessions: Any | None = None  # SessionRuntime for explicitly authorized target identities
     metadata: dict[str, Any] = field(default_factory=dict)
 
 

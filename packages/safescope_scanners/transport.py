@@ -25,6 +25,7 @@ from safescope_core.policy import (
     SSRFBlocked,
 )
 
+from .pacing import AdaptivePacer, RequestPlan
 from .pinned_http import PinnedAsyncHTTPTransport
 
 if TYPE_CHECKING:
@@ -78,6 +79,7 @@ class GatedTransport:
         self._owns_client = owns_client
         self._max_response_bytes = max_response_bytes
         self._pins: dict[tuple[str, int], tuple[str, ...]] = {}
+        self._pacer = AdaptivePacer(float(gate.snapshot.get("max_rps", 1.0)))
 
     async def __aenter__(self) -> GatedTransport:
         return self
@@ -96,7 +98,7 @@ class GatedTransport:
         for _ in range(MAX_REDIRECTS + 1):
             self._allow(current)
             await self._ensure_hostname_pin(current)
-            delay = self._gate.compute_delay()
+            delay = max(self._gate.compute_delay(), self._pacer.compute_delay())
             if delay:
                 await asyncio.sleep(delay)
 
@@ -115,6 +117,7 @@ class GatedTransport:
                     body=sanitize_body(body),
                     url=str(response.url),
                 )
+                self._pacer.observe(response.status_code)
 
                 location = response.headers.get("location")
                 if not response.is_redirect or not location:
@@ -123,6 +126,28 @@ class GatedTransport:
             current = _redirect_descriptor(current, location)
 
         raise PolicyDeny("REDIRECT_LIMIT", f"more than {MAX_REDIRECTS} redirects")
+
+    async def execute_plan(self, plan: RequestPlan) -> list[ResponseData]:
+        """Execute a sequential or explicitly bounded concurrent request plan."""
+        if not plan.concurrent:
+            return [await self.request(request) for request in plan.requests]
+        limit = max(1, int(self._gate.snapshot.get("max_concurrency", 1)))
+        semaphore = asyncio.Semaphore(limit)
+
+        async def execute(request: RequestDescriptor) -> ResponseData:
+            async with semaphore:
+                return await self.request(request)
+
+        return list(await asyncio.gather(*(execute(request) for request in plan.requests)))
+
+    @property
+    def pacing_state(self) -> dict[str, float | int]:
+        """Operational metadata safe to include in an audit log/report."""
+        return {
+            "initial_rps": self._pacer.initial_rps,
+            "current_rps": self._pacer.current_rps,
+            "soft_mode_entries": self._pacer.soft_mode_entries,
+        }
 
     async def probe_tls(self, hostname: str, port: int = 443) -> TLSProbe:
         """Collect TLS metadata through the same gate and SSRF validation path."""

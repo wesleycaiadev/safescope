@@ -6,7 +6,7 @@ O produto opera por política aplicada no backend: uma avaliação `PASSIVE` usa
 
 ## Estado atual
 
-As Fases 1 a 5 estão implementadas. O produto possui banco SQLite ou PostgreSQL Neon, API FastAPI, dashboard Next.js, fila e worker contínuo, scanners passivos, evidências sanitizadas, Security Score, relatórios e acompanhamento de correção. A Fase 6 prepara, sem habilitar por padrão, os controles necessários para futuros testes autenticados e ativos em laboratório autorizado.
+As seis fases do roadmap estão implementadas. O produto possui banco SQLite ou PostgreSQL Neon, API FastAPI, dashboard Next.js, fila e worker contínuo, scanners passivos, evidências sanitizadas, Security Score, relatórios e acompanhamento de correção. A base de testes autenticados inclui sessões efêmeras do alvo, descoberta autorizada, oráculos, journal de restauração e scanners IDOR/matriz de autorização sobre canários em laboratório.
 
 ## Desenvolvimento local
 
@@ -38,6 +38,31 @@ Também é possível processar somente um job ou consultar a fila:
 ```
 
 O dashboard cria organizações, projetos, targets, regras de escopo e registros de autorização. Ele dispara somente avaliações `PASSIVE`; autorizações cadastradas nesta fase não habilitam testes ativos nem mutações.
+
+O painel é operado por um único proprietário. Não existe cadastro público de
+usuários. Enquanto estiver em `SAFESCOPE_MODE=development`, mantenha API e painel
+restritos ao computador local.
+
+## Laboratório da Fase 6
+
+Os scanners ativos não entram automaticamente na fila do dashboard. O alvo de
+gabarito roda somente em `127.0.0.1:8090` e contém uma falha IDOR intencional:
+
+```bash
+make lab-test
+make lab-up
+# documentação do alvo em http://127.0.0.1:8090/docs
+make lab-down
+```
+
+O worker tenta recuperar o journal antes de iniciar qualquer job. Também é
+possível solicitar a recuperação manualmente:
+
+```bash
+./.venv/bin/safescope worker recover
+```
+
+Detalhes e limites estão em [`docs/13-FASE-6.md`](docs/13-FASE-6.md).
 
 ## Relatórios e ZAP Baseline
 

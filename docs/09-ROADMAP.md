@@ -1,7 +1,7 @@
 # Roadmap de implementação
 
-**Status:** 5 fases concluídas. A Fase 6, base segura para testes autenticados,
-está em andamento com 3 de 9 passos concluídos.
+**Status:** 6 de 6 fases concluídas. Não resta fase de implementação no roadmap
+atual; novas famílias de scanner devem entrar como extensões revisadas.
 
 ## Fase 1 — fundação segura
 
@@ -35,17 +35,18 @@ está em andamento com 3 de 9 passos concluídos.
 - [x] PostgreSQL Neon provisionado e migrations Alembic aplicadas em banco vazio.
 - [x] Operação local de usuário único mantida em modo de desenvolvimento; autenticação pública continua desabilitada.
 
-## Fase 6 — base segura para testes autenticados (em andamento)
+## Fase 6 — base segura para testes autenticados
 
 - [x] Modos reais e teto de risco por modo; `GUIDED` e `AGGRESSIVE` não são aliases passivos.
 - [x] Gate por requisição com escopo, exclusões, verbo, tipo de conteúdo, payload aprovado, janela vigente, orçamento, kill switch e reavaliação de redirect. `DELETE` somente em recurso criado pelo scan.
 - [x] Transporte HTTP com conexão presa ao IP validado, SNI/domínio original, redirect reavaliado e pool limitado pelo `max_concurrency` da ROE.
-- [ ] `LoginProfile` e `SessionRuntime`, usando o cofre efêmero e verificando a saúde da sessão antes de cada scanner autenticado.
-- [ ] Descoberta autorizada de superfície por especificações fornecidas pelo cliente e artefatos públicos dentro do escopo.
-- [ ] Oráculos com controle negativo e evidência comparativa sanitizada.
-- [ ] Journal persistente de mutações, restauração e replay de recuperação no boot do worker.
-- [ ] Scanners ativos controlados, começando por matriz de autorização/IDOR em laboratório, com jitter adaptativo e planos de concorrência explícitos, sem habilitação automática em produção.
-- [ ] Laboratório vulnerável isolado no CI, com gabarito e métricas de falso positivo/negativo.
+- [x] `LoginProfile` e `SessionRuntime` para contas do alvo, usando o cofre efêmero e verificando a saúde da sessão antes de cada scanner autenticado.
+- [x] Descoberta autorizada por OpenAPI, schema GraphQL fornecido e referências JavaScript, sempre filtrada pelas origens do escopo.
+- [x] Oráculos diferencial e de autorização com controle negativo e evidência comparativa sanitizada.
+- [x] Journal persistente de mutações, registro antes da escrita, restauração e replay de recuperação no boot do worker.
+- [x] Scanners ativos de matriz de autorização/IDOR somente sobre canários declarados, com jitter adaptativo e planos de concorrência limitados pela ROE.
+- [x] Laboratório vulnerável isolado com gabarito positivo e negativo, validado em testes e em imagem Docker local.
 
-Critério de avanço: `make check` verde, revisão de segurança, ROE válida e
-testes no laboratório isolado antes de qualquer habilitação de scan ativo.
+Critério concluído: `make check` verde, controles documentados e scanners ativos
+fora da fila pública. Uma ROE válida, alvo verificado, contas-canário e allowlists
+continuam obrigatórios antes de qualquer uso fora do laboratório.

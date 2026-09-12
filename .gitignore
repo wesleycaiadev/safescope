@@ -58,6 +58,7 @@ migrations/versions/__pycache__/
 
 # Supabase CLI cache
 supabase/.temp/
+.safescope/
 
 # Reports / Evidence
 *.pdf

@@ -1,4 +1,4 @@
-.PHONY: bootstrap dev dev-api dev-web worker check lint format test typecheck web-check self-scan clean
+.PHONY: bootstrap dev dev-api dev-web worker check lint format test typecheck web-check lab-build lab-test lab-up lab-down self-scan clean
 
 VENV := .venv
 PY := $(VENV)/bin/python3
@@ -58,6 +58,18 @@ test-policy:
 
 test-scanners:
 	$(PYTEST) -v tests/scanners/
+
+lab-build:
+	docker build -t safescope-idor-lab:phase6 lab
+
+lab-test:
+	$(PYTEST) -v tests/lab/ tests/scanners/test_razor_authorization.py
+
+lab-up: lab-build
+	docker run --rm -d --name safescope-phase6-lab --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true -p 127.0.0.1:8090:8090 safescope-idor-lab:phase6
+
+lab-down:
+	-docker stop safescope-phase6-lab
 
 # ── Self-scan (dogfooding) ───────────────────────────────────────────
 self-scan:

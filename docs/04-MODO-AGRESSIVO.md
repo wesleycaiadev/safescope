@@ -1,6 +1,8 @@
-# Modo AGGRESSIVE: requisitos futuros
+# Modo AGGRESSIVE: controles implementados
 
-Esta fase não está implementada. Antes de qualquer scanner ativo, os seguintes controles são obrigatórios:
+A fundação segura está implementada, mas os scanners ativos permanecem fora da
+fila pública. Antes de qualquer uso fora do laboratório, estes controles são
+obrigatórios:
 
 - ROE assinada e vinculada ao alvo; verificação de domínio não substitui a ROE.
 - Janela de execução, origens incluídas, exclusões, verbos, volume e taxa gravados no snapshot do scan.
@@ -11,4 +13,8 @@ Esta fase não está implementada. Antes de qualquer scanner ativo, os seguintes
 - Recursos de prova registrados no `ResourceLedger`, com limpeza confirmada.
 - Audit log append-only de autorização, execução e interrupção.
 
-O primeiro marco de integração externa é apenas ZAP Baseline em modo passivo. Ferramentas de teste ativo não devem ser acopladas ao MVP até que todos esses requisitos sejam verificáveis por testes.
+Os scanners IDOR e matriz de autorização aceitam somente objetos-canário
+declarados e precisam de duas identidades de teste do alvo. O ZAP Baseline
+continua sendo a única integração externa disponível no dashboard e permanece
+passivo. Novas famílias ativas exigem ADR, gabarito positivo/negativo e revisão
+dos controles antes de entrar no registro.
